@@ -341,14 +341,79 @@ elif menu_choice == "🧩 Information Clustering":
     st.title("🧩 Information Clustering")
     
     try:
-        df = pd.read_excel("df_clean.xlsx", engine="openpyxl")
+        df = pd.read_csv("clustered_reviews.csv", encoding='utf-8')
 
         company_list = sorted(df["Company Name"].dropna().unique())
         selected_company = st.selectbox("🔎 Chọn công ty để phân tích:", company_list)
         df = df[df["Company Name"] == selected_company]
+        # Radar chart cho các thuộc tính đánh giá
+        st.markdown("---")
+        st.subheader("📈 Đánh giá tổng quan theo các khía cạnh")
+        radar_cols = [
+            "Salary & benefits",
+            "Training & learning",
+            "Management cares about me",
+            "Culture & fun",
+            "Office & workspace"
+        ]
+        if all(col in df.columns for col in radar_cols):
+            avg_scores = df[radar_cols].mean().values
+
+            fig = go.Figure()
+            fig.add_trace(go.Scatterpolar(
+                r=avg_scores,
+                theta=radar_cols,
+                fill='toself',
+                name=selected_company,
+                text=[f"{col}: {score:.2f}" for col, score in zip(radar_cols, avg_scores)],
+                hoverinfo="text",
+                marker=dict(color='royalblue')
+            ))
+
+            fig.update_layout(
+                polar=dict(radialaxis=dict(visible=True, range=[0, 5])),
+                showlegend=False,
+                title=f"Biểu đồ Radar đánh giá - {selected_company}"
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.warning("⚠️ Dữ liệu không đầy đủ để vẽ biểu đồ radar.")
+
+        # Bar chart & pie chart cho cột Sentiment
+        if "Sentiment" in df.columns:
+            st.markdown("---")
+            st.subheader("📊 Phân phối cảm xúc từ đánh giá")
+
+            sentiment_counts = df['Sentiment'].value_counts()
+
+            color_map = {
+                'positive': '#90ee90',
+                'neutral': '#87cefa',
+                'negative': '#ffb6c1'
+            }
+            colors = [color_map.get(sent, 'gray') for sent in sentiment_counts.index]
+
+            col1, col2 = st.columns(2)
+            with col1:
+                fig_bar, ax = plt.subplots()
+                sentiment_counts.plot(kind='bar', color=colors, ax=ax)
+                ax.set_title("Số lượng bình chọn theo cảm xúc")
+                ax.set_xlabel("Sentiment")
+                ax.set_ylabel("Số lượng")
+                ax.set_xticklabels(sentiment_counts.index, rotation=0)
+                st.pyplot(fig_bar)
+
+            with col2:
+                fig_pie, ax = plt.subplots()
+                sentiment_counts.plot(kind='pie', autopct='%1.1f%%', colors=colors, ax=ax)
+                ax.set_title("Tỷ lệ cảm xúc theo phần trăm")
+                ax.set_ylabel("")
+                st.pyplot(fig_pie)        
+    
         # Vector hóa văn bản
         vectorizer_cluster = CountVectorizer(max_features=1000)
-        X_vec = vectorizer_cluster.fit_transform(df["clean_text"])
+        X_vec = vectorizer_cluster.fit_transform(df["binh_luan"])
 
         # Phân cụm với KMeans
         kmeans = KMeans(n_clusters=4, random_state=42)
@@ -367,13 +432,56 @@ elif menu_choice == "🧩 Information Clustering":
 
         cluster_stats = df['cluster'].value_counts().sort_index()
         st.markdown(f"### 📊 Công ty `{selected_company}` có các cụm như sau:")
-
+                # Hàm lấy từ khóa toàn công ty
+        def get_top_keywords_company(df, n_keywords=20):
+            all_text = " ".join(df['clean_text'].dropna().astype(str).tolist())
+            if not all_text:
+                return []
+            vectorizer = CountVectorizer()
+            X = vectorizer.fit_transform([all_text])
+            words = vectorizer.get_feature_names_out()
+            counts = X.toarray().flatten()
+            word_freq = pd.Series(counts, index=words).sort_values(ascending=False)
+            return word_freq.head(n_keywords)
+            
         for cluster_id in cluster_stats.index:
             top_words, cluster_text = get_top_words_in_cluster(df, cluster_id)
             st.markdown(f"- Cụm **#{cluster_id}**: 🔑 Từ khóa: _{', '.join(top_words)}_")
             if cluster_text:
-                wordcloud = WordCloud(width=600, height=300, background_color='white').generate(cluster_text)
+                wordcloud = WordCloud(width=1000, height=500, background_color='white',max_words=10).generate(cluster_text)
                 st.image(wordcloud.to_array(), caption=f"WordCloud cho cụm #{cluster_id}", use_container_width=True)
+                            # === Thống kê tổng hợp các từ khóa từ tất cả cụm ===
+        # all_keywords = []
+        # for cluster_id in cluster_stats.index:
+        #     top_words, _ = get_top_words_in_cluster(df, cluster_id)
+        #     all_keywords.extend(top_words)
+
+        # if all_keywords:
+        #     st.markdown("---")
+        #     st.markdown("### 🧠 Tổng hợp vấn đề nổi bật từ các cụm đánh giá")
+
+        #     keyword_counts = pd.Series(all_keywords).value_counts()
+        #     top_keywords = keyword_counts.head(10)
+
+        #     for idx, (kw, count) in enumerate(top_keywords.items(), 1):
+        #         st.markdown(f"{idx}. **{kw}** — xuất hiện trong **{count} cụm**")
+
+        #     # Optional: vẽ biểu đồ từ khóa nổi bật
+        #     fig, ax = plt.subplots()
+        #     sns.barplot(x=top_keywords.values, y=top_keywords.index, palette="viridis", ax=ax)
+        #     ax.set_title("📈 Từ khóa nổi bật nhất trong các cụm")
+        #     ax.set_xlabel("Số cụm xuất hiện")
+        #     ax.set_ylabel("Từ khóa")
+        #     st.pyplot(fig) 
+                # Từ khóa nổi bật toàn công ty
+        st.markdown("---")
+        st.subheader("📌 Từ khóa nổi bật toàn công ty")
+        top_keywords = get_top_keywords_company(df, n_keywords=10)
+        st.write("Top 10 từ khóa phổ biến:")
+        st.markdown(", ".join(top_keywords.index))
+
+        wordcloud_all = WordCloud(width=1000, height=500, background_color='white',max_words=10).generate(" ".join(df['clean_text']))
+        st.image(wordcloud_all.to_array(), caption=f"WordCloud toàn bộ review công ty {selected_company}", use_container_width=True)            
     except Exception as e:
         st.error(f"Lỗi đọc hoặc xử lý dữ liệu: {e}")
 
