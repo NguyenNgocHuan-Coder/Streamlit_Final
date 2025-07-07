@@ -320,7 +320,7 @@ elif menu_choice == "💬 Sentiment Analysis":
                 )
 
                 st.markdown("---")
-                st.subheader("📊 Thống kê cảm xúc theo người đánh giá (Name)")
+                st.subheader("📊 Thống kê cảm xúc theo từng công ty (Name)")
                 df_counts = df_file.groupby(['Name', 'sentiment']).size().unstack(fill_value=0)
                 df_percent = df_counts.div(df_counts.sum(axis=1), axis=0) * 100
                 st.dataframe(df_percent.style.format("{:.1f}%"))
@@ -331,7 +331,7 @@ elif menu_choice == "💬 Sentiment Analysis":
                     color=['red', 'skyblue', 'blue']
                 )
                 ax.set_ylabel("Tỷ lệ (%)")
-                ax.set_title("Tỷ lệ cảm xúc theo từng người đánh giá")
+                ax.set_title("Tỷ lệ cảm xúc theo từng công ty")
                 ax.set_xticklabels(ax.get_xticklabels(),rotation=360)
                 st.pyplot(fig)
 
